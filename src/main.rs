@@ -1,105 +1,36 @@
-use lazy_static::lazy_static;
-use regex::Regex;
-use std::io;
+use std::process::ExitCode;
 
-lazy_static! {
-    static ref RE_NUMBER: Regex = Regex::new(r"\d+(\.\d+)?").unwrap();
-    static ref RE_OPERATOR: Regex = Regex::new(r"[+\-*/]").unwrap();
-}
+use calculator::{Calculator,Error};
 
-fn main() {
-    let mut quit: bool = false;
-    let mut called_once: bool = false;
+mod calculator;
 
-    while !quit {
-        if !called_once {
-            println!("You can type q to quit the program");
-            called_once = true;
-        }
+fn main() -> Result<ExitCode, Error> {
+    println!("Type q to quit.");
 
-        println!("Please enter an expression:");
-
-        let mut input: String = String::new();
-
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Failed to read line");
-
-        if input.trim() == "q" || input.trim() == "Q" {
-            println!("The Programm will now exit");
-            quit = true;
-        } else {
-            if input_is_valid(&input) {
-                println!("input is valid");
-
-                let result: f64 = calculate_result(&input);
-
-                println!("Result: {}", result);
-            } else {
-                println!("input is not valid")
+    println!("");
+    loop {
+        let mut input = String::new();
+        match std::io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                if input.trim() == "q" || input.trim() =="Q"{
+                    println!("The Programm will now Exit!");
+                    return Ok(ExitCode::from(0));
+                }
+                let tokens = Calculator::parse(input.trim());
+                if tokens.is_err() {
+                    println!("{:?}", tokens.err().unwrap());
+                    continue;
+                }
+                let expr = Calculator::expression(tokens?);
+                if let Some(v) = Calculator::evaluate(expr) {
+                    println!("{}", v);
+                }
             }
+            Err(error) => println!("error: {}", error),
         }
     }
 }
-
-fn calculate_result(input: &String) -> f64 {
-    let mut current_operator: char = '+';
-    let tokens: Vec<String> = tokenize(&input.trim());
-    let mut result: f64 = 0.0;
-    for token in tokens {
-        if RE_NUMBER.is_match(&token) {
-            let number: f64 = token.parse().unwrap();
-
-            match current_operator {
-                '+' => result += number,
-                '-' => result -= number,
-                '*' => result *= number,
-                '/' => result /= number,
-                _ => panic!("Unknown operator: {}", current_operator),
-            }
-        } else if RE_OPERATOR.is_match(&token) {
-            current_operator = token.chars().next().unwrap();
-        } else {
-            panic!("Unknown token: {}", token);
-        }
-    }
-    return result;
-}
-
-fn input_is_valid(input: &String) -> bool {
-    let tokens = tokenize(&input.trim());
-    for token in tokens {
-        if !RE_NUMBER.is_match(&token) && !RE_OPERATOR.is_match(&token) {
-            return false;
-        }
-    }
-    return true;
-}
-fn tokenize(input: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current_token = String::new();
-
-    for ch in input.chars() {
-        if ch.is_digit(10) {
-            current_token.push(ch);
-        } else if ch == ' ' {
-            //Do nothing
-        } else {
-            if !current_token.is_empty() {
-                tokens.push(current_token.clone());
-                current_token.clear();
-            }
-            tokens.push(ch.to_string());
-        }
-    }
-
-    if !current_token.is_empty() {
-        tokens.push(current_token);
-    }
-
-    return tokens;
-}
-
+/*
 #[cfg(test)]
 mod tests {
     use super::calculate_result;
@@ -124,3 +55,4 @@ mod tests {
         assert!(result == 2.25);
     }
 }
+*/
