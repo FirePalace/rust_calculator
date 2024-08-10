@@ -4,11 +4,12 @@ pub enum Operator {
     Sub,
     Mul,
     Div,
+    Exp,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum Token {
-    Number(i64),
+    Number(f64),
     Op(Operator),
     Bracket(char),
 }
@@ -28,11 +29,14 @@ impl Calculator {
         let chars: std::str::Chars = expr.chars();
         let mut tokens: Vec<Token> = Vec::new();
         let mut parenthesies: Vec<char> = Vec::new();
-        let mut negative_number: i64 = 0;
+        let mut negative_number: f64 = 0.0;
 
         let mut is_first_char: bool = true;
         let mut is_negative_number: bool = false;
         let mut is_first_number: bool = true;
+
+        let mut is_after_decimal_point: bool = false;
+        let mut decimal_point_count: i32 = 0;
 
         for c in chars {
             //Handle negative numbers at the beginning of the string
@@ -43,8 +47,15 @@ impl Calculator {
             }
             is_first_char = false;
             if is_negative_number {
-                if !c.is_numeric() {
+                
+                if c == '.' {
+                    is_after_decimal_point = true;
+                    continue;
+                }
+                if !c.is_numeric() && c != '.' {
                     is_negative_number = false;
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
 
                     negative_number = -negative_number;
                     tokens.push(Token::Number(negative_number));
@@ -58,14 +69,24 @@ impl Calculator {
 
                     continue;
                 }
-                if is_first_number {
-                    let digit: i64 = c as i64 - 48;
-                    negative_number = digit;
-                    is_first_number = false;
+                if !is_after_decimal_point {
+                    if is_first_number {
+                        let digit: f64 = (c as u32 - 48) as f64;
+                        negative_number = digit;
+                        is_first_number = false;
+                    } else {
+                        let digit: f64 = (c as u32 - 48) as f64;
+                        negative_number = negative_number * 10.0 + digit;
+                    }
                 } else {
-                    let digit = c as i64 - 48;
-                    negative_number = negative_number * 10 + digit;
+                    let mut digit: f64 = (c as u32 - 48) as f64;
+                    decimal_point_count += 1;
+                    for _ in 0..decimal_point_count {
+                        digit /= 10.0;
+                    }
+                    negative_number += digit;
                 }
+
                 continue;
             }
 
@@ -74,16 +95,35 @@ impl Calculator {
             match c {
                 '0'..='9' => match tokens.last_mut() {
                     Some(Token::Number(n)) => {
-                        *n = *n * 10 + (c as i64 - 48);
+                        if !is_after_decimal_point {
+                            *n = *n * 10.0 + (c as u32 - 48) as f64;
+                        } else {
+                            let mut digit = (c as u32 - 48) as f64;
+                            decimal_point_count += 1;
+                            for _ in 0..decimal_point_count {
+                                digit /= 10.0;
+                            }
+                            *n += digit;
+                        }
                     }
                     _ => {
-                        let digit = c as i64 - 48;
+                        let digit: f64 = (c as u32 - 48) as f64;
                         tokens.push(Token::Number(digit));
                     }
                 },
+                '^' => {
+                    tokens.push(Token::Op(Operator::Exp));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                '.' => {
+                    is_after_decimal_point = true;
+                }
                 '(' => {
                     tokens.push(Token::Bracket('('));
                     parenthesies.push(c);
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
                 }
                 ')' => {
                     tokens.push(Token::Bracket(')'));
@@ -94,12 +134,33 @@ impl Calculator {
                     } else {
                         return Err(Error::MismatchedParenthesies);
                     }
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
                 }
-                '+' => tokens.push(Token::Op(Operator::Add)),
-                '-' => tokens.push(Token::Op(Operator::Sub)),
-                '*' => tokens.push(Token::Op(Operator::Mul)),
-                '/' => tokens.push(Token::Op(Operator::Div)),
-                ' ' => {}
+                '+' => {
+                    tokens.push(Token::Op(Operator::Add));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                '-' => {
+                    tokens.push(Token::Op(Operator::Sub));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                '*' => {
+                    tokens.push(Token::Op(Operator::Mul));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                '/' => {
+                    tokens.push(Token::Op(Operator::Div));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                ' ' => {
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
                 '\n' => {}
                 _ => return Err(Error::BadToken(c)),
             }
@@ -144,32 +205,37 @@ impl Calculator {
         queue
     }
 
-    pub fn evaluate(mut tokens: Vec<Token>) -> Option<f32> {
+    pub fn evaluate(mut tokens: Vec<Token>) -> Option<f64> {
         tokens.reverse();
 
-        let mut stack: Vec<f32> = Vec::new();
+        let mut stack: Vec<f64> = Vec::new();
         while let Some(token) = tokens.pop() {
             match token {
-                Token::Number(num) => stack.push(num as f32),
+                Token::Number(num) => stack.push(num),
                 Token::Op(Operator::Add) => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
                     stack.push(left + right)
                 }
                 Token::Op(Operator::Sub) => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
                     stack.push(left - right)
                 }
                 Token::Op(Operator::Mul) => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
                     stack.push(left * right)
                 }
                 Token::Op(Operator::Div) => {
-                    let right = stack.pop().unwrap();
-                    let left = stack.pop().unwrap();
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
                     stack.push(left / right)
+                }
+                Token::Op(Operator::Exp) => {
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
+                    stack.push(left.powf(right))
                 }
                 _ => {}
             }
