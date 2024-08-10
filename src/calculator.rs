@@ -2,6 +2,7 @@
 pub enum Operator {
     Add,
     Sub,
+    Mod,
     Mul,
     Div,
     Exp,
@@ -61,6 +62,7 @@ impl Calculator {
                     match c {
                         '+' => tokens.push(Token::Op(Operator::Add)),
                         '-' => tokens.push(Token::Op(Operator::Sub)),
+                        '%' => tokens.push(Token::Op(Operator::Mod)),
                         '*' => tokens.push(Token::Op(Operator::Mul)),
                         '/' => tokens.push(Token::Op(Operator::Div)),
                         '^' => tokens.push(Token::Op(Operator::Exp)),
@@ -144,6 +146,11 @@ impl Calculator {
                 }
                 '-' => {
                     tokens.push(Token::Op(Operator::Sub));
+                    is_after_decimal_point = false;
+                    decimal_point_count = 0;
+                }
+                '%' => {
+                    tokens.push(Token::Op(Operator::Mod));
                     is_after_decimal_point = false;
                     decimal_point_count = 0;
                 }
@@ -237,6 +244,11 @@ impl Calculator {
                     let left: f64 = stack.pop().unwrap();
                     stack.push(left.powf(right))
                 }
+                Token::Op(Operator::Mod) => {
+                    let right: f64 = stack.pop().unwrap();
+                    let left: f64 = stack.pop().unwrap();
+                    stack.push(left.rem_euclid(right))
+                }
                 _ => {}
             }
         }
@@ -261,6 +273,7 @@ impl std::fmt::Display for Operator {
         match self {
             Operator::Add => write!(f, "+"),
             Operator::Sub => write!(f, "-"),
+            Operator::Mod => write!(f, "%"),
             Operator::Mul => write!(f, "*"),
             Operator::Div => write!(f, "/"),
             Operator::Exp => write!(f, "^"),
@@ -277,8 +290,16 @@ mod tests {
         test_template("1 +1-4     +54444", 54442.0)
     }
     #[test]
-    fn point_before_line_calculation() -> Result<(), Error> {
+    fn negative_exp() -> Result<(), Error> {
         test_template("-2^5", -32.0)
+    }
+    #[test]
+    fn modulo() -> Result<(), Error> {
+        test_template("-4%23", 19.0)
+    }
+    #[test]
+    fn modulo2() -> Result<(), Error> {
+        test_template("1+1+1+1+1+1+1+1+1+1", 10.0)
     }
     
     fn test_template (input: &str, assertion: f64) -> Result<(), Error> {
