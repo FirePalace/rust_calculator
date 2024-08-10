@@ -47,7 +47,6 @@ impl Calculator {
             }
             is_first_char = false;
             if is_negative_number {
-                
                 if c == '.' {
                     is_after_decimal_point = true;
                     continue;
@@ -64,6 +63,7 @@ impl Calculator {
                         '-' => tokens.push(Token::Op(Operator::Sub)),
                         '*' => tokens.push(Token::Op(Operator::Mul)),
                         '/' => tokens.push(Token::Op(Operator::Div)),
+                        '^' => tokens.push(Token::Op(Operator::Exp)),
                         _ => {}
                     }
 
@@ -247,6 +247,26 @@ impl Calculator {
         }
     }
 }
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Token::Number(n) => write!(f, "{}", n),
+            Token::Op(op) => write!(f, "{}", op),
+            Token::Bracket(b) => write!(f, "{}", b),
+        }
+    }
+}
+impl std::fmt::Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Operator::Add => write!(f, "+"),
+            Operator::Sub => write!(f, "-"),
+            Operator::Mul => write!(f, "*"),
+            Operator::Div => write!(f, "/"),
+            Operator::Exp => write!(f, "^"),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -254,16 +274,35 @@ mod tests {
 
     #[test]
     fn basic() -> Result<(), Error> {
-        let tokens = Calculator::parse("1 +1-4     +54444");
-        let expr = Calculator::expression(tokens?);
-
-        if let Some(v) = Calculator::evaluate(expr) {
-            assert_eq!(v, 54442.0);
-        }
-
-        Ok(())
+        test_template("1 +1-4     +54444", 54442.0)
     }
     #[test]
-    #[ignore = "unimplemented"]
-    fn point_before_line_calculation() {}
+    fn point_before_line_calculation() -> Result<(), Error> {
+        test_template("-2^5", -32.0)
+    }
+    
+    fn test_template (input: &str, assertion: f64) -> Result<(), Error> {
+        let tokens: Result<Vec<super::Token>, Error> = Calculator::parse(input);
+        let temp_tokens: &Result<Vec<crate::calculator::Token>, Error> = &tokens;
+
+        println!("TOKENS:");
+        if let Ok(tokens) = temp_tokens {
+            for token in tokens {
+                println!("{}", token);
+            }
+        }
+        let expr: Vec<super::Token> = Calculator::expression(tokens?);
+        println!("___________________");
+        println!("RPN EXPRESSION:");
+       
+        for expre in &expr {
+            println!("{}", expre);
+        }
+
+        if let Some(v) = Calculator::evaluate(expr) {
+            assert_eq!(v, assertion);
+        }
+        Ok(())
+    
+    }
 }
