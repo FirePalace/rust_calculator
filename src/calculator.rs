@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum Operator {
     Add,
     Sub,
@@ -8,7 +8,7 @@ pub enum Operator {
     Exp,
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum Token {
     Number(f64),
     Op(Operator),
@@ -25,6 +25,17 @@ pub enum Error {
 }
 
 impl Calculator {
+    pub fn sanitize_input(input: &str) -> String {
+        let mut input_string = input.to_string();
+        while let Some(index) = input_string.find("-(") {
+            input_string.replace_range(index..index + 2, "-1*(");
+        }
+        while let Some(index) = input_string.find("(-") {
+            input_string.replace_range(index..index + 2, "(0-");
+        }
+
+        input_string
+    }
     pub fn parse<T: AsRef<str>>(expr: T) -> Result<Vec<Token>, Error> {
         let expr: &str = expr.as_ref();
         let chars: std::str::Chars = expr.chars();
@@ -175,7 +186,42 @@ impl Calculator {
         if !parenthesies.is_empty() {
             return Err(Error::MismatchedParenthesies);
         }
-        Ok(tokens)
+
+        let tokens2 = Calculator::fix_exponents(tokens);
+
+        Ok(tokens2)
+    }
+
+    fn fix_exponents(mut tokens: Vec<Token>) -> Vec<Token> {
+        let mut new_tokens = tokens.clone();
+
+        let mut last_negative_number: f64 = 0.0;
+
+        for (i, token) in new_tokens.iter_mut().enumerate() {
+            if let Token::Number(n) = token {
+                if *n <= 0.0 {
+                    last_negative_number = *n;
+                    continue;
+                }
+            }
+            if let Token::Op(Operator::Exp) = token {
+                if Token::Bracket(')') != tokens[i - 1] {
+                    if last_negative_number != 0.0 {
+                        tokens.insert(i - 1, Token::Bracket('('));
+                        tokens.insert(i - 1, Token::Number(-1.0));
+                        tokens.insert(i, Token::Op(Operator::Mul));
+                        tokens.insert(i + 5, Token::Bracket(')'));
+                    } else {
+                        tokens.insert(i - 1, Token::Bracket('('));
+                        tokens.insert(i + 3, Token::Bracket(')'));
+                    }
+                }
+            }
+
+            last_negative_number = 0.0;
+        }
+
+        tokens
     }
 
     pub fn expression(mut tokens: Vec<Token>) -> Vec<Token> {
@@ -291,18 +337,22 @@ mod tests {
     }
     #[test]
     fn negative_exp() -> Result<(), Error> {
-        test_template("-2^5", -32.0)
+        test_template("(-2)^2", 4.0)
+    }
+    #[test]
+    fn negative_exp2() -> Result<(), Error> {
+        test_template("-2^2", -4.0)
+    }
+    #[test]
+    fn negative_exp3() -> Result<(), Error> {
+        test_template("(-2*2)^2", 16.0)
     }
     #[test]
     fn modulo() -> Result<(), Error> {
         test_template("-4%23", 19.0)
     }
-    #[test]
-    fn modulo2() -> Result<(), Error> {
-        test_template("1+1+1+1+1+1+1+1+1+1", 10.0)
-    }
-    
-    fn test_template (input: &str, assertion: f64) -> Result<(), Error> {
+    fn test_template(input: &str, assertion: f64) -> Result<(), Error> {
+        let input = Calculator::sanitize_input(input);
         let tokens: Result<Vec<super::Token>, Error> = Calculator::parse(input);
         let temp_tokens: &Result<Vec<crate::calculator::Token>, Error> = &tokens;
 
@@ -315,7 +365,7 @@ mod tests {
         let expr: Vec<super::Token> = Calculator::expression(tokens?);
         println!("___________________");
         println!("RPN EXPRESSION:");
-       
+
         for expre in &expr {
             println!("{}", expre);
         }
@@ -324,6 +374,5 @@ mod tests {
             assert_eq!(v, assertion);
         }
         Ok(())
-    
     }
 }

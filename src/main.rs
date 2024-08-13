@@ -11,6 +11,8 @@ fn main() -> Result<ExitCode, Error> {
         let mut input: String = String::new();
         match std::io::stdin().read_line(&mut input) {
             Ok(_) => {
+                input = Calculator::sanitize_input(&input);
+
                 if input.trim() == "q" || input.trim() == "Q" {
                     println!("The programm will now exit!");
                     return Ok(ExitCode::from(0));
